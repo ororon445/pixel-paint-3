@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Піксельний Арт Редактор</title>
+    <!-- Підключення Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Стиль шрифту Inter -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Світло-сірий фон */
+        }
+        /* Стилі для канвасу, щоб він був квадратним і адаптивним */
+        #pixelCanvasContainer {
+            width: 100%;
+            max-width: 600px; /* Максимальна ширина для великих екранів */
+            aspect-ratio: 1 / 1;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border-radius: 1rem;
+            overflow: hidden;
+            background-color: #fff;
+        }
+        #pixelCanvas {
+            display: block;
+            touch-action: none; /* Запобігає прокручуванню на мобільних під час малювання */
+        }
+        /* Стиль для кнопки завантаження */
+        .action-button {
+            transition: all 0.3s ease;
+            transform: translateY(0);
+        }
+        .action-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.5);
+        }
+        /* Стиль для невеликих кнопок інструментів */
+        .tool-button-small {
+            font-size: 0.875rem; /* text-sm */
+            line-height: 1.25rem;
+            min-width: 60px; /* Мінімум для розміщення іконок */
+        }
+        /* Приховання стандартного вигляду input type="range" */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #d1d5db;
+            border-radius: 4px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            box-shadow: 0 0 2px rgba(0,0,0,0.5);
+        }
+        
+        /* Стилі для модального вікна Галереї */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        /* Стиль для елементів вилітаючого списку */
+        .flyout-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+        .flyout-item:hover {
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 flex flex-col items-center min-h-screen">
+
+    <div class="max-w-4xl w-full">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-8 text-center">
+            🎨 Піксельний Арт Редактор
+        </h1>
+
+        <!-- Контрольна панель -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-8 grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
+            
+            <!-- Вибір кольору -->
+            <div class="col-span-1">
+                <label for="colorPicker" class="block text-sm font-medium text-gray-700 mb-1">Колір</label>
+                <input type="color" id="colorPicker" value="#3b82f6" class="w-full h-10 rounded-lg border-2 border-gray-300 cursor-pointer">
+            </div>
+            
+            <!-- Вибір розміру сітки -->
+            <div class="col-span-1">
+                <label for="gridSizeSlider" class="block text-sm font-medium text-gray-700 mb-1">
+                    Розмір сітки: <span id="gridSizeValue" class="font-semibold text-blue-600">16x16</span>
+                </label>
+                <input type="range" id="gridSizeSlider" min="8" max="64" step="8" value="16" class="w-full">
+            </div>
+
+            <!-- Вибір інструменту (Вилітаючий список) -->
+            <div class="col-span-2 md:col-span-1 relative">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Інструмент</label>
+                
+                <!-- Головна кнопка для відкриття списку -->
+                <button id="mainToolButton" class="w-full bg-blue-600 text-white font-semibold py-2 px-3 rounded-lg hover:bg-blue-700 transition duration-150 shadow-md flex items-center justify-center space-x-2">
+                    <span id="toolIcon">✏️</span>
+                    <span>Олівець</span>
+                    <!-- Іконка стрілки вниз -->
+                    <svg id="toolArrow" class="w-4 h-4 ml-1 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+
+                <!-- Вилітаючий список інструментів -->
+                <div id="toolFlyout" class="absolute hidden top-full mt-2 w-48 bg-white rounded-lg shadow-xl z-10 border border-gray-200 right-0">
+                    <div id="penToolButton" data-tool="pen" class="flyout-item rounded-t-lg">
+                        <span class="mr-2">✏️</span> Олівець
+                    </div>
+                    <div id="rainbowToolButton" data-tool="rainbow" class="flyout-item">
+                        <span class="mr-2">🌈</span> Райдужний Олівець
+                    </div>
+                    <div id="randomToolButton" data-tool="random" class="flyout-item">
+                        <span class="mr-2">🎲</span> Рандомний Пензлик
+                    </div>
+                    <div id="eraserToolButton" data-tool="eraser" class="flyout-item">
+                        <span class="mr-2">🧼</span> Гумка
+                    </div>
+                    <div id="fillToolButton" data-tool="fill" class="flyout-item rounded-b-lg">
+                        <span class="mr-2">🧺</span> Заливка
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Кнопки дій -->
+            <div class="flex space-x-2 col-span-2 md:col-span-1">
+                 <button id="clearButton" class="flex-1 bg-yellow-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-yellow-600 transition duration-150 shadow-md">
+                    Очистити
+                </button>
+                <button id="saveButton" class="action-button flex-1 bg-indigo-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-indigo-600 transition duration-150 shadow-lg">
+                    Зберегти 💾
+                </button>
+            </div>
+
+            <div class="col-span-2 flex space-x-2">
+                <button id="galleryButton" class="action-button flex-1 bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-purple-700 transition duration-150 shadow-lg">
+                    Галерея 🖼️
+                </button>
+                <button id="downloadButton" class="action-button flex-1 bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-150 shadow-lg">
+                    Завантажити PNG
+                </button>
+            </div>
+        </div>
+
+        <!-- Контейнер для канвасу -->
+        <div id="pixelCanvasContainer" class="mx-auto">
+            <canvas id="pixelCanvas" width="600" height="600"></canvas>
+        </div>
+
+        <p class="text-center text-gray-500 mt-4 text-sm sm:text-base">
+            Олівець/Гумка/Райдуга/Рандом: Клацніть або перетягніть. Заливка: Клацніть один раз.
+        </p>
+        
+        <!-- Місце для повідомлень про стан -->
+        <div id="statusMessage" class="text-center mt-4 p-3 bg-green-100 text-green-700 rounded-lg hidden" role="alert"></div>
+
+        <!-- Ініціалізація Firebase -->
+        <div id="firebase-init-status" class="text-xs text-gray-400 mt-8 text-center"></div>
+
+    </div>
+
+    <!-- Модальне вікно Галереї (Flyout List) -->
+    <div id="galleryModal" class="modal-overlay hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-11/12 md:w-3/4 lg:w-1/2 max-h-[90vh] flex flex-col">
+            <!-- Заголовок модального вікна -->
+            <div class="p-6 border-b flex justify-between items-center">
+                <h2 class="text-2xl font-bold text-gray-900">Ваша Піксельна Галерея</h2>
+                <button id="closeGalleryButton" class="text-gray-400 hover:text-gray-600 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <!-- Список збережених робіт -->
+            <div id="galleryList" class="p-4 overflow-y-auto flex-1">
+                <!-- Сюди буде завантажуватися список артів з Firestore -->
+                <p class="text-center text-gray-500 py-4">Завантаження галереї...</p>
+            </div>
+            
+            <!-- Підвал -->
+            <div class="p-4 border-t text-sm text-gray-500 text-center">
+                Зберігається у вашому особистому сховищі Firebase.
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Імпорти Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, onSnapshot, collection, query, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        setLogLevel('Debug');
+
+        // Глобальні змінні середовища
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db, auth, userId = null;
+        let isAuthReady = false;
+
+        /**
+         * Ініціалізація Firebase та аутентифікація.
+         */
+        async function setupFirebase() {
+            if (!firebaseConfig) {
+                console.warn("Firebase config not available. Skipping Firebase setup.");
+                document.getElementById('firebase-init-status').textContent = "Firebase не ініціалізовано (конфігурація відсутня).";
+                return;
+            }
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // 1. Спробувати аутентифікувати користувача
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // 2. Налаштувати слухача стану аутентифікації
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('firebase-init-status').textContent = `Firebase ініціалізовано. Користувач ID: ${userId} | App ID: ${appId}`;
+                        isAuthReady = true;
+                        setupGalleryListener(); // Почати слухати збережені арти
+                    } else {
+                        document.getElementById('firebase-init-status').textContent = "Firebase: Користувач вийшов.";
+                        isAuthReady = false;
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase setup failed:", error);
+                document.getElementById('firebase-init-status').textContent = `Помилка ініціалізації Firebase: ${error.message}`;
+            }
+        }
+
+        // ---------------------------------------------
+        // Логіка Піксельного Редактора та Firebase
+        // ---------------------------------------------
+
+        const canvas = document.getElementById('pixelCanvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('colorPicker');
+        const gridSizeSlider = document.getElementById('gridSizeSlider');
+        const gridSizeValueDisplay = document.getElementById('gridSizeValue');
+        const clearButton = document.getElementById('clearButton');
+        const downloadButton = document.getElementById('downloadButton');
+        const canvasContainer = document.getElementById('pixelCanvasContainer');
+        const statusMessage = document.getElementById('statusMessage');
+        
+        // Нові елементи для flyout
+        const mainToolButton = document.getElementById('mainToolButton');
+        const toolIcon = document.getElementById('toolIcon');
+        const toolNameDisplay = mainToolButton.querySelector('span:nth-child(2)');
+        const toolFlyout = document.getElementById('toolFlyout');
+        const toolArrow = document.getElementById('toolArrow');
+
+        // Елементи для Галереї/Збереження
+        const saveButton = document.getElementById('saveButton');
+        const galleryButton = document.getElementById('galleryButton');
+        const galleryModal = document.getElementById('galleryModal');
+        const galleryList = document.getElementById('galleryList');
+
+        let GRID_SIZE = parseInt(gridSizeSlider.value);
+        let PIXEL_DATA = [];
+        let currentColor = colorPicker.value;
+        let isDrawing = false;
+        let currentTool = 'pen'; 
+        let savedArts = []; // Локальне сховище для завантажених робіт
+
+        const toolMap = {
+            'pen': { icon: '✏️', name: 'Олівець', color: 'bg-blue-600' },
+            'rainbow': { icon: '🌈', name: 'Райдужний', color: 'bg-pink-600' },
+            'random': { icon: '🎲', name: 'Рандом', color: 'bg-green-600' }, // Новий інструмент!
+            'eraser': { icon: '🧼', name: 'Гумка', color: 'bg-yellow-600' }, 
+            'fill': { icon: '🧺', name: 'Заливка', color: 'bg-indigo-600' }
+        };
+
+        // Кольори для райдужного олівця та індекс для циклу
+        const RAINBOW_COLORS = ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3']; 
+        let rainbowIndex = 0;
+
+
+        /**
+         * Генерує випадковий шістнадцятковий колір.
+         * @returns {string} Шістнадцятковий код кольору (наприклад, #1a2b3c).
+         */
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+
+        /**
+         * Ініціалізує сітку з початковим кольором (прозорим або білим).
+         * @param {number} size - Розмір сітки (наприклад, 16 для 16x16).
+         */
+        function initializeGrid(size) {
+            GRID_SIZE = size;
+            PIXEL_DATA = Array(size).fill(0).map(() => Array(size).fill(null)); // null для прозорості
+            resizeCanvas();
+            drawCanvas();
+        }
+
+        /**
+         * Адаптує розмір канвасу до розміру контейнера.
+         */
+        function resizeCanvas() {
+            const containerWidth = canvasContainer.clientWidth;
+            // Встановлюємо розмір канвасу як квадрат
+            canvas.width = containerWidth;
+            canvas.height = containerWidth;
+        }
+
+        /**
+         * Виконує повне перемальовування канвасу на основі PIXEL_DATA.
+         */
+        function drawCanvas() {
+            const cellSize = canvas.width / GRID_SIZE;
+            
+            // 1. Очистити канвас
+            ctx.fillStyle = '#ffffff'; // Залити білим кольором як базовий фон
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Намалювати всі пікселі з PIXEL_DATA
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const color = PIXEL_DATA[r][c];
+                    if (color) {
+                        ctx.fillStyle = color;
+                        ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+                    }
+                }
+            }
+
+            // 3. Намалювати сітку
+            ctx.strokeStyle = '#e5e7eb'; // Легкий сірий колір для ліній сітки
+            ctx.lineWidth = 1;
+
+            for (let i = 0; i <= GRID_SIZE; i++) {
+                // Горизонтальні лінії
+                ctx.beginPath();
+                ctx.moveTo(0, i * cellSize);
+                ctx.lineTo(canvas.width, i * cellSize);
+                ctx.stroke();
+
+                // Вертикальні лінії
+                ctx.beginPath();
+                ctx.moveTo(i * cellSize, 0);
+                ctx.lineTo(i * cellSize, canvas.height);
+                ctx.stroke();
+            }
+        }
+
+        /**
+         * Виконує алгоритм заливки Flood Fill.
+         */
+        function floodFill(startRow, startCol, newColor) {
+            const targetColor = PIXEL_DATA[startRow][startCol];
+            
+            // Якщо цільовий колір вже такий самий, як новий колір
+            if (targetColor === newColor) {
+                return;
+            }
+
+            const queue = [[startRow, startCol]];
+            const R = GRID_SIZE;
+            const C = GRID_SIZE;
+
+            while (queue.length > 0) {
+                const [r, c] = queue.shift();
+
+                // Перевірка меж
+                if (r < 0 || r >= R || c < 0 || c >= C) {
+                    continue;
+                }
+
+                // Перевірка кольору: заливаємо тільки пікселі, що відповідають targetColor
+                if (PIXEL_DATA[r][c] !== targetColor) {
+                    continue;
+                }
+
+                // Застосування нового кольору
+                PIXEL_DATA[r][c] = newColor;
+
+                // Додавання сусідів у чергу
+                queue.push([r + 1, c]); 
+                queue.push([r - 1, c]); 
+                queue.push([r, c + 1]); 
+                queue.push([r, c - 1]); 
+            }
+            
+            drawCanvas(); // Повне перемальовування після заливки
+        }
+
+
+        /**
+         * Обробляє подію малювання (зміни кольору пікселя).
+         */
+        function handleDrawing(e, isSingleClick = false) {
+            if (!isDrawing && currentTool !== 'fill' && e.type !== 'mousedown' && e.type !== 'touchstart') return;
+            if (currentTool === 'fill' && !isSingleClick) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            
+            let clientX, clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            const cellSize = canvas.width / GRID_SIZE;
+            const col = Math.floor(x / cellSize);
+            const row = Math.floor(y / cellSize);
+
+            if (row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE) {
+                
+                if (currentTool === 'fill') {
+                    floodFill(row, col, currentColor);
+                } else {
+                    let colorToApply = null;
+
+                    if (currentTool === 'eraser') {
+                        colorToApply = null;
+                    } else if (currentTool === 'rainbow') {
+                        // Використання наступного кольору веселки
+                        colorToApply = RAINBOW_COLORS[rainbowIndex];
+                        rainbowIndex = (rainbowIndex + 1) % RAINBOW_COLORS.length;
+                    } else if (currentTool === 'random') { // Логіка рандомного пензлика
+                        colorToApply = getRandomColor();
+                    } 
+                    else { // 'pen'
+                        colorToApply = currentColor;
+                    }
+                    
+                    if (PIXEL_DATA[row][col] !== colorToApply) { 
+                        PIXEL_DATA[row][col] = colorToApply;
+                        
+                        if (colorToApply) {
+                            ctx.fillStyle = colorToApply;
+                            ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+                        } else {
+                            // Очищення пікселя до білого фону
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+                        }
+
+                        // Перемальовування ліній сітки навколо пікселя
+                        drawCanvasLines(col, row, cellSize);
+                    }
+                }
+            }
+        }
+
+        /**
+         * Перемальовує лінії сітки, які могли бути затерті пікселем.
+         */
+        function drawCanvasLines(col, row, cellSize) {
+            ctx.strokeStyle = '#e5e7eb';
+            ctx.lineWidth = 1;
+
+            const linesToRedraw = [
+                [col * cellSize, row * cellSize, (col + 1) * cellSize, row * cellSize],
+                [col * cellSize, (row + 1) * cellSize, (col + 1) * cellSize, (row + 1) * cellSize],
+                [col * cellSize, row * cellSize, col * cellSize, (row + 1) * cellSize],
+                [(col + 1) * cellSize, row * cellSize, (col + 1) * cellSize, (row + 1) * cellSize],
+            ];
+
+            linesToRedraw.forEach(([x1, y1, x2, y2]) => {
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            });
+        }
+        
+        /**
+         * Встановлює активний інструмент і оновлює UI.
+         */
+        function setTool(tool) {
+            currentTool = tool;
+            
+            // Оновлення головної кнопки інструменту
+            const toolInfo = toolMap[tool];
+            toolIcon.textContent = toolInfo.icon;
+            toolNameDisplay.textContent = toolInfo.name;
+            
+            // Зміна кольору головної кнопки
+            const allColors = ['bg-blue-600', 'bg-green-600', 'bg-indigo-600', 'bg-pink-600', 'bg-yellow-600'];
+            const allHoverColors = allColors.map(c => c.replace('600', '700'));
+
+            mainToolButton.classList.remove(...allColors, ...allHoverColors);
+            
+            mainToolButton.classList.add(toolInfo.color, `hover:${toolInfo.color.replace('600', '700')}`);
+            
+            // Приховуємо вилітаючий список
+            toolFlyout.classList.add('hidden');
+            toolArrow.classList.remove('rotate-180');
+        }
+
+        /**
+         * Відображає тимчасове повідомлення про стан.
+         */
+        function showMessage(text, classes) {
+            statusMessage.textContent = text;
+            statusMessage.className = `text-center mt-4 p-3 rounded-lg ${classes}`;
+            statusMessage.classList.remove('hidden');
+            setTimeout(() => {
+                statusMessage.classList.add('hidden');
+            }, 3000);
+        }
+
+        /**
+         * Отримує посилання на колекцію Firestore для особистих робіт.
+         */
+        function getCollectionRef() {
+            if (!db || !userId) return null;
+            // Приватний шлях: /artifacts/{appId}/users/{userId}/saved_art
+            return collection(db, 'artifacts', appId, 'users', userId, 'saved_art');
+        }
+
+        /**
+         * Зберігає поточний арт у Firestore.
+         */
+        async function saveArt() {
+            if (!isAuthReady) {
+                showMessage("Помилка: Аутентифікація не завершена. Зачекайте.", "bg-red-100 text-red-700");
+                return;
+            }
+            
+            const artName = prompt("Введіть назву для вашого шедевру:"); 
+
+            if (!artName || artName.trim() === "") {
+                showMessage("Збереження скасовано.", "bg-yellow-100 text-yellow-700");
+                return;
+            }
+            
+            try {
+                // Збереження даних як JSON-рядок (серіалізація вкладеного масиву)
+                const docRef = await addDoc(getCollectionRef(), {
+                    name: artName.trim(),
+                    gridSize: GRID_SIZE,
+                    data: JSON.stringify(PIXEL_DATA), 
+                    createdAt: Date.now()
+                });
+                showMessage(`Збережено як: "${artName.trim()}"`, "bg-green-100 text-green-700");
+            } catch (e) {
+                console.error("Помилка при збереженні документа: ", e);
+                showMessage("Помилка при збереженні!", "bg-red-100 text-red-700");
+            }
+        }
+
+        /**
+         * Налаштовує слухача, який оновлює список savedArts у реальному часі.
+         */
+        function setupGalleryListener() {
+            const colRef = getCollectionRef();
+            if (!colRef) return;
+
+            // Використовуємо onSnapshot для отримання оновлень у реальному часі
+            onSnapshot(colRef, (snapshot) => {
+                savedArts = [];
+                snapshot.forEach((doc) => {
+                    savedArts.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // Сортування за датою створення (найновіші зверху) в пам'яті
+                savedArts.sort((a, b) => b.createdAt - a.createdAt);
+                
+                renderGalleryList();
+            }, (error) => {
+                console.error("Помилка слухача галереї: ", error);
+                showMessage("Помилка завантаження галереї.", "bg-red-100 text-red-700");
+            });
+        }
+
+        /**
+         * Рендерить список робіт у модальному вікні Галереї.
+         */
+        function renderGalleryList() {
+            galleryList.innerHTML = '';
+            
+            if (savedArts.length === 0) {
+                galleryList.innerHTML = '<p class="text-gray-500 text-center py-4">Ваша галерея порожня. Збережіть свій перший арт!</p>';
+                return;
+            }
+
+            savedArts.forEach(art => {
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 rounded-lg shadow-sm mb-2 transition duration-150';
+                
+                // Кнопка Завантажити
+                const loadBtn = document.createElement('button');
+                loadBtn.textContent = `${art.name} (${art.gridSize}x${art.gridSize})`;
+                loadBtn.className = 'text-left font-medium text-gray-800 hover:text-blue-600 transition duration-150 truncate flex-1';
+                loadBtn.title = `Клікніть, щоб завантажити "${art.name}"`;
+                loadBtn.onclick = () => loadArtFromFirestore(art);
+                
+                // Кнопка Видалити
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '❌ <span class="hidden sm:inline">Видалити</span>';
+                deleteBtn.className = 'ml-4 p-2 text-sm text-red-500 rounded-lg hover:bg-red-100 transition duration-150';
+                deleteBtn.title = 'Видалити';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation(); // Запобігти завантаженню при кліку на кнопку видалення
+                    deleteArt(art.id, art.name);
+                };
+                
+                item.appendChild(loadBtn);
+                item.appendChild(deleteBtn);
+                galleryList.appendChild(item);
+            });
+        }
+
+        /**
+         * Завантажує вибраний арт на канвас.
+         */
+        function loadArtFromFirestore(art) {
+            try {
+                const data = JSON.parse(art.data);
+                
+                GRID_SIZE = art.gridSize;
+                PIXEL_DATA = data;
+                
+                gridSizeSlider.value = GRID_SIZE;
+                gridSizeValueDisplay.textContent = `${GRID_SIZE}x${GRID_SIZE}`;
+
+                resizeCanvas();
+                drawCanvas();
+                
+                showMessage(`Завантажено: "${art.name}"`, "bg-green-100 text-green-700");
+                galleryModal.classList.add('hidden'); // Закрити галерею
+            } catch (e) {
+                console.error("Помилка при завантаженні/парсингу даних: ", e);
+                showMessage("Помилка завантаження даних!", "bg-red-100 text-red-700");
+            }
+        }
+
+        /**
+         * Видаляє арт з Firestore.
+         */
+        async function deleteArt(docId, name) {
+            if (!isAuthReady) {
+                showMessage("Помилка: Аутентифікація не завершена.", "bg-red-100 text-red-700");
+                return;
+            }
+
+            // Використовуємо prompt як замінник confirm() для підтвердження
+            const confirmation = prompt(`Ви впевнені, що хочете видалити "${name}"?\n(Введіть 'так' для підтвердження)`);
+            if (confirmation?.toLowerCase() !== 'так') {
+                return;
+            }
+
+            try {
+                await deleteDoc(doc(getCollectionRef(), docId));
+                // Список автоматично оновиться через onSnapshot
+                showMessage(`Видалено: "${name}"`, "bg-red-100 text-red-700");
+            } catch (e) {
+                console.error("Помилка при видаленні документа: ", e);
+                showMessage("Помилка при видаленні!", "bg-red-100 text-red-700");
+            }
+        }
+
+
+        // ---------------------------------------------
+        // Обробники Подій
+        // ---------------------------------------------
+
+        // 1. Події миші/дотику для малювання/стирання/заливки
+        canvas.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            if (currentTool === 'fill') {
+                handleDrawing(e, true); 
+                isDrawing = false;
+            } else {
+                isDrawing = true;
+                handleDrawing(e);
+            }
+        });
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing && currentTool !== 'fill') {
+                e.preventDefault();
+                handleDrawing(e);
+            }
+        });
+        document.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        // Дотик (для мобільних пристроїв)
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (currentTool === 'fill') {
+                handleDrawing(e, true);
+                isDrawing = false;
+            } else {
+                isDrawing = true;
+                handleDrawing(e);
+            }
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            if (isDrawing && currentTool !== 'fill') {
+                e.preventDefault();
+                handleDrawing(e);
+            }
+        }, { passive: false });
+        
+        document.addEventListener('touchend', () => {
+            isDrawing = false;
+        });
+
+
+        // 2. Зміна кольору (при зміні кольору повертаємося до звичайного олівця)
+        colorPicker.addEventListener('input', (e) => {
+            currentColor = e.target.value;
+            // Якщо вибрано фіксований колір, перемикаємо на 'pen', якщо активний не 'fill' або 'eraser'
+            if (currentTool !== 'fill' && currentTool !== 'eraser') {
+                setTool('pen'); 
+            }
+        });
+
+        // 3. Зміна розміру сітки
+        gridSizeSlider.addEventListener('input', (e) => {
+            const newSize = parseInt(e.target.value);
+            gridSizeValueDisplay.textContent = `${newSize}x${newSize}`;
+            if (newSize !== GRID_SIZE) {
+                initializeGrid(newSize);
+            }
+        });
+        
+        // 4. Перемикання інструментів (Flyout logic)
+        mainToolButton.addEventListener('click', () => {
+            const isHidden = toolFlyout.classList.toggle('hidden');
+            if (isHidden) {
+                toolArrow.classList.remove('rotate-180');
+            } else {
+                toolArrow.classList.add('rotate-180');
+            }
+        });
+
+        // Обробники кліку на елементи списку інструментів
+        document.getElementById('penToolButton').addEventListener('click', (e) => setTool(e.currentTarget.dataset.tool));
+        document.getElementById('rainbowToolButton').addEventListener('click', (e) => setTool(e.currentTarget.dataset.tool)); 
+        document.getElementById('randomToolButton').addEventListener('click', (e) => setTool(e.currentTarget.dataset.tool)); // Обробник для рандомного пензлика
+        document.getElementById('eraserToolButton').addEventListener('click', (e) => setTool(e.currentTarget.dataset.tool));
+        document.getElementById('fillToolButton').addEventListener('click', (e) => setTool(e.currentTarget.dataset.tool));
+
+        // Закриття flyout при кліку поза ним
+        document.addEventListener('click', (e) => {
+            const toolContainer = mainToolButton.closest('.relative');
+            // Перевіряємо, чи клік був поза контейнером інструментів і чи flyout відкритий
+            if (!toolContainer.contains(e.target) && !toolFlyout.classList.contains('hidden')) {
+                toolFlyout.classList.add('hidden');
+                toolArrow.classList.remove('rotate-180');
+            }
+        });
+        
+        // 5. Кнопки дій
+        clearButton.addEventListener('click', () => {
+            initializeGrid(GRID_SIZE); 
+            showMessage("Канвас очищено!", "bg-green-100 text-green-700");
+        });
+        
+        saveButton.addEventListener('click', saveArt); 
+        
+        galleryButton.addEventListener('click', () => { 
+            if (isAuthReady) {
+                galleryModal.classList.remove('hidden');
+                renderGalleryList(); 
+            } else {
+                showMessage("Зачекайте, поки ініціалізується Firebase...", "bg-yellow-100 text-yellow-700");
+            }
+        });
+
+        document.getElementById('closeGalleryButton').addEventListener('click', () => {
+            galleryModal.classList.add('hidden');
+        });
+
+
+        // 6. Кнопка "Завантажити PNG"
+        downloadButton.addEventListener('click', () => {
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            const outputSize = 512; 
+            tempCanvas.width = outputSize;
+            tempCanvas.height = outputSize;
+
+            const cellSize = outputSize / GRID_SIZE;
+            
+            tempCtx.fillStyle = '#ffffff';
+            tempCtx.fillRect(0, 0, outputSize, outputSize);
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const color = PIXEL_DATA[r][c];
+                    if (color) {
+                        tempCtx.fillStyle = color;
+                        tempCtx.fillRect(
+                            Math.floor(c * cellSize), 
+                            Math.floor(r * cellSize), 
+                            Math.ceil(cellSize), 
+                            Math.ceil(cellSize)
+                        );
+                    }
+                }
+            }
+            
+            const dataURL = tempCanvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = dataURL;
+            a.download = `pixel_art_${GRID_SIZE}x${GRID_SIZE}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            showMessage("Зображення PNG завантажено!", "bg-blue-100 text-blue-700");
+        });
+
+        // 7. Адаптивність (перемальовування при зміні розміру вікна)
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            drawCanvas();
+        });
+
+        // 8. Ініціалізація при завантаженні
+        window.onload = function() {
+            setupFirebase(); // Ініціалізація Firebase
+            initializeGrid(GRID_SIZE);
+            setTool('pen'); 
+        };
+
+    </script>
+</body>
+</html>
